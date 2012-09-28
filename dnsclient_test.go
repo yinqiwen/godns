@@ -1,13 +1,13 @@
 package godns
 
 import (
+	//"net"
 	"testing"
-	"net"
 )
 
 func TestLoopkupIP(t *testing.T) {
 	options := &LookupOptions{
-		DNSServers: []string{"10.6.18.42"}}
+		DNSServers: GoogleDNSServers}
 	addrs, err := LookupIP("youtube.com", options)
 	if nil != err {
 		t.Error("Failed to load ini file for reason:" + err.Error())
