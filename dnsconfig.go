@@ -12,11 +12,13 @@ type dnsConfig struct {
 	timeout  int      // seconds before giving up on packet
 	attempts int      // lost packets before giving up on server
 	rotate   bool     // round robin among servers
+	net      string
 }
 
-func dnsConfigWithServers(servers []string) (*dnsConfig, error) {
+func dnsConfigWithOptions(options *LookupOptions) (*dnsConfig, error) {
 	conf := new(dnsConfig)
-	conf.servers = servers
+	conf.net = options.Net
+	conf.servers = options.DNSServers
 	//conf.servers = make([]string, 3)[0:0] // small, but the standard limit
 	conf.search = make([]string, 0)
 	conf.ndots = 1

@@ -5,12 +5,13 @@
 package godns
 
 import (
+	"errors"
+	"io"
 	"math/rand"
-	"sort"
 	"net"
+	"sort"
 	"time"
 )
-
 
 // DNSError represents a DNS lookup error.
 type DNSError struct {
@@ -248,6 +249,85 @@ func (s byPref) sort() {
 	sort.Sort(s)
 }
 
+func net_read(c net.Conn, net string, buf []byte) (n int, err error) {
+	switch net {
+	case "tcp", "tcp4", "tcp6":
+		n, err = c.Read(buf[0:2])
+		if err != nil || n != 2 {
+			return n, err
+		}
+		l, _ := unpackUint16(buf[0:2], 0)
+		if l == 0 {
+			return 0, errors.New("ErrShortRead")
+		}
+		if int(l) > len(buf) {
+			return int(l), io.ErrShortBuffer
+		}
+		n, err = c.Read(buf[:l])
+		if err != nil {
+			return n, err
+		}
+		i := n
+		for i < int(l) {
+			j, err := c.Read(buf[i:int(l)])
+			if err != nil {
+				return i, err
+			}
+			i += j
+		}
+		n = i
+		return
+	case "", "udp", "udp4", "udp6":
+		return c.Read(buf)
+	}
+	return -1, errors.New("Unexpected here")
+}
+
+func unpackUint16(msg []byte, off int) (v uint16, off1 int) {
+	v = uint16(msg[off])<<8 | uint16(msg[off+1])
+	off1 = off + 2
+	return
+}
+
+// Helper function for packing
+func packUint16(i uint16) (byte, byte) {
+	return byte(i >> 8), byte(i)
+}
+
+func net_write(c net.Conn, net string, p []byte) (n int, err error) {
+	switch net {
+	case "tcp", "tcp4", "tcp6":
+		if len(p) < 2 {
+			return 0, io.ErrShortBuffer
+		}
+		a, b := packUint16(uint16(len(p)))
+		n, err = c.Write([]byte{a, b})
+		if err != nil {
+			return n, err
+		}
+		if n != 2 {
+			return n, io.ErrShortWrite
+		}
+		n, err = c.Write(p)
+		if err != nil {
+			return n, err
+		}
+		i := n
+		if i < len(p) {
+			j, err := c.Write(p[i:len(p)])
+			if err != nil {
+				return i, err
+			}
+			i += j
+		}
+		n = i
+		return
+	case "", "udp", "udp4", "udp6":
+		return c.Write(p)
+	}
+	return -1, errors.New("Unexpected here")
+}
+
 // Send a request on the connection and hope for a reply.
 // Up to cfg.attempts attempts.
 func exchange(cfg *dnsConfig, c net.Conn, name string, qtype uint16) (*dnsMsg, error) {
@@ -266,7 +346,8 @@ func exchange(cfg *dnsConfig, c net.Conn, name string, qtype uint16) (*dnsMsg, e
 	}
 
 	for attempt := 0; attempt < cfg.attempts; attempt++ {
-		n, err := c.Write(msg)
+		//n, err := c.Write(msg)
+		n, err := net_write(c, cfg.net, msg)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +359,8 @@ func exchange(cfg *dnsConfig, c net.Conn, name string, qtype uint16) (*dnsMsg, e
 		}
 
 		buf := make([]byte, 2000) // More than enough.
-		n, err = c.Read(buf)
+		//n, err = c.Read(buf)
+		n, err = net_read(c, cfg.net, buf)
 		if err != nil {
 			if e, ok := err.(net.Error); ok && e.Timeout() {
 				continue
@@ -313,11 +395,15 @@ func tryOneName(cfg *dnsConfig, name string, qtype uint16) (cname string, addrs 
 		// all the cfg.servers[i] are IP addresses, which
 		// Dial will use without a DNS lookup.
 		server := cfg.servers[i] + ":53"
-		c, cerr := net.Dial("udp", server)
+		if len(cfg.net) == 0 {
+			cfg.net = "udp"
+		}
+		c, cerr := net.Dial(cfg.net, server)
 		if cerr != nil {
 			err = cerr
 			continue
 		}
+
 		msg, merr := exchange(cfg, c, name, qtype)
 		c.Close()
 		if merr != nil {

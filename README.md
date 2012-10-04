@@ -1,7 +1,7 @@
 godns
 =======
 
-Go DNS client library modified from GO's net package 
+Go DNS client library modified from GO's net package, support  DNS over tcp
 
 ## Install godns
 

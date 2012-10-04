@@ -8,6 +8,7 @@ import (
 type LookupOptions struct {
 	DNSServers []string // DNS servers to use
 	Cache      bool     //
+	Net        string   //Default:udp
 }
 
 var cacheLookupResults = make(map[string][]net.IP)
@@ -93,13 +94,13 @@ func LookupHost(name string, options *LookupOptions) (addrs []string, err error)
 // answers.
 func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 	result, exist := cacheLookupResults[name]
-	if exist{
-	   return result, nil
+	if exist {
+		return result, nil
 	}
 	if nil == options || nil == options.DNSServers || len(options.DNSServers) == 0 {
 		return net.LookupIP(name)
 	}
-	
+
 	haddrs := lookupStaticHost(name)
 	if len(haddrs) > 0 {
 		for _, haddr := range haddrs {
@@ -112,7 +113,7 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 		}
 	}
 
-	dnscfg, dnserr := dnsConfigWithServers(options.DNSServers)
+	dnscfg, dnserr := dnsConfigWithOptions(options)
 	if dnserr != nil || dnscfg == nil {
 		err = dnserr
 		return
@@ -136,8 +137,8 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 		return
 	}
 	addrs = append(addrs, convertRR_AAAA(records)...)
-	if options.Cache{
-	   cacheLookupResults[name] = addrs
+	if options.Cache {
+		cacheLookupResults[name] = addrs
 	}
 	return
 }
@@ -153,7 +154,7 @@ func LookupCNAME(name string, options *LookupOptions) (cname string, err error) 
 		return net.LookupCNAME(name)
 	}
 
-	dnscfg, dnserr := dnsConfigWithServers(options.DNSServers)
+	dnscfg, dnserr := dnsConfigWithOptions(options)
 	if dnserr != nil || dnscfg == nil {
 		err = dnserr
 		return
