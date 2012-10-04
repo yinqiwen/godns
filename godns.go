@@ -71,9 +71,8 @@ func lookup(cfg *dnsConfig, name string, qtype uint16) (cname string, addrs []dn
 // depending on our lookup code, so that Go and C get the same
 // answers.
 func LookupHost(name string, options *LookupOptions) (addrs []string, err error) {
-	addrs = lookupStaticHost(name)
-	if len(addrs) > 0 {
-		return
+	if nil == options || nil == options.DNSServers || len(options.DNSServers) == 0 {
+		return net.LookupHost(name)
 	}
 	ips, err := LookupIP(name, options)
 	if err != nil {
