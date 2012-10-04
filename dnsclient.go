@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -357,8 +358,11 @@ func exchange(cfg *dnsConfig, c net.Conn, name string, qtype uint16) (*dnsMsg, e
 		} else {
 			c.SetReadDeadline(time.Now().Add(time.Duration(cfg.timeout) * time.Second))
 		}
-
-		buf := make([]byte, 2000) // More than enough.
+		package_size := 2000
+		if strings.EqualFold(cfg.net, "tcp") || strings.EqualFold(cfg.net, "tcpv4") || strings.EqualFold(cfg.net, "tcpv6") {
+			package_size = 65536
+		}
+		buf := make([]byte, package_size) // More than enough.
 		//n, err = c.Read(buf)
 		n, err = net_read(c, cfg.net, buf)
 		if err != nil {
