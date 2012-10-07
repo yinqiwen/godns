@@ -402,7 +402,7 @@ func tryOneName(cfg *dnsConfig, name string, qtype uint16) (cname string, addrs 
 		if len(cfg.net) == 0 {
 			cfg.net = "udp"
 		}
-		c, cerr := net.Dial(cfg.net, server)
+		c, cerr := net.DialTimeout(cfg.net, server, time.Duration(cfg.timeout)*time.Second)
 		if cerr != nil {
 			err = cerr
 			continue
