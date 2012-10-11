@@ -3,12 +3,14 @@ package godns
 import (
 	"errors"
 	"net"
+	"time"
 )
 
 type LookupOptions struct {
-	DNSServers []string // DNS servers to use
-	Cache      bool     //
-	Net        string   //Default:udp
+	DNSServers  []string // DNS servers to use
+	Cache       bool     //
+	Net         string   //Default:udp
+	DialTimeout func(net, addr string, timeout time.Duration) (net.Conn, error)
 }
 
 var cacheLookupResults = make(map[string][]net.IP)
