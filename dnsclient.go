@@ -324,6 +324,7 @@ func net_write(c net.Conn, net string, p []byte) (n int, err error) {
 		n = i
 		return
 	case "", "udp", "udp4", "udp6":
+	    
 		return c.Write(p)
 	}
 	return -1, errors.New("Unexpected here")

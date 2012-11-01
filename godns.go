@@ -3,6 +3,7 @@ package godns
 import (
 	"errors"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -10,10 +11,12 @@ type LookupOptions struct {
 	DNSServers  []string // DNS servers to use
 	Cache       bool     //
 	Net         string   //Default:udp
+	OnlyIPv4    bool
 	DialTimeout func(net, addr string, timeout time.Duration) (net.Conn, error)
 }
 
 var cacheLookupResults = make(map[string][]net.IP)
+var cacheMutex sync.Mutex
 
 func lookup(cfg *dnsConfig, name string, qtype uint16) (cname string, addrs []dnsRR, err error) {
 	if !isDomainName(name) {
@@ -94,12 +97,17 @@ func LookupHost(name string, options *LookupOptions) (addrs []string, err error)
 // depending on our lookup code, so that Go and C get the same
 // answers.
 func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
-	result, exist := cacheLookupResults[name]
-	if exist {
-		return result, nil
+	if options.Cache {
+		cacheMutex.Lock()
+		result, exist := cacheLookupResults[name]
+		cacheMutex.Unlock()
+		if exist {
+			return result, nil
+		}
 	}
+
 	if nil == options || nil == options.DNSServers || len(options.DNSServers) == 0 {
-		return net.LookupIP(name)
+		//return net.LookupIP(name)
 	}
 
 	haddrs := lookupStaticHost(name)
@@ -129,17 +137,23 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 	if cname != "" {
 		name = cname
 	}
-	_, records, err = lookup(dnscfg, name, dnsTypeAAAA)
-	if err != nil && len(addrs) > 0 {
-		// Ignore error because A lookup succeeded.
-		err = nil
+
+	if options.OnlyIPv4 {
+		_, records, err = lookup(dnscfg, name, dnsTypeAAAA)
+		if err != nil && len(addrs) > 0 {
+			// Ignore error because A lookup succeeded.
+			err = nil
+		}
+		if err != nil {
+			return
+		}
+		addrs = append(addrs, convertRR_AAAA(records)...)
 	}
-	if err != nil {
-		return
-	}
-	addrs = append(addrs, convertRR_AAAA(records)...)
+
 	if options.Cache {
+		cacheMutex.Lock()
 		cacheLookupResults[name] = addrs
+		cacheMutex.Unlock()
 	}
 	return
 }
