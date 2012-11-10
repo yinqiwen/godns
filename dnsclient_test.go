@@ -7,8 +7,8 @@ import (
 
 func TestLoopkupIPOverTcp(t *testing.T) {
 	options := &LookupOptions{
-		DNSServers: OpenDNSServers, Net: "tcp"}
-	addrs, err := LookupIP("www.youtube.com", options)
+		DNSServers: GoogleDNSServers, Net: "tcp"}
+	addrs, err := LookupIP("www.google.com.hk", options)
 	if nil != err {
 		t.Error("Failed to load ini file for reason:" + err.Error())
 		return
@@ -21,8 +21,8 @@ func TestLoopkupIPOverTcp(t *testing.T) {
 
 func TestLoopkupIPOverUdp(t *testing.T) {
 	options := &LookupOptions{
-		DNSServers: OpenDNSServers, Net: "udp"}
-	addrs, err := LookupIP("www.youtube.com", options)
+		DNSServers: GoogleDNSServers, Net: "udp"}
+	addrs, err := LookupIP("www.google.com.hk", options)
 	if nil != err {
 		t.Error("Failed to load ini file for reason:" + err.Error())
 		return

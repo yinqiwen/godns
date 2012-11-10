@@ -15,7 +15,13 @@ type LookupOptions struct {
 	DialTimeout func(net, addr string, timeout time.Duration) (net.Conn, error)
 }
 
-var cacheLookupResults = make(map[string][]net.IP)
+type dnsCache struct {
+	ips []net.IP
+	ttl uint32
+	ts  time.Time
+}
+
+var cacheLookupResults = make(map[string]*dnsCache)
 var cacheMutex sync.Mutex
 
 func lookup(cfg *dnsConfig, name string, qtype uint16) (cname string, addrs []dnsRR, err error) {
@@ -102,7 +108,9 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 		result, exist := cacheLookupResults[name]
 		cacheMutex.Unlock()
 		if exist {
-			return result, nil
+			if time.Now().Before(result.ts.Add(time.Duration(result.ttl) * time.Second)) {
+				return result.ips, nil
+			}
 		}
 	}
 
@@ -129,16 +137,20 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 	}
 	var records []dnsRR
 	var cname string
+	ttl := uint32(3600)
 	cname, records, err = lookup(dnscfg, name, dnsTypeA)
 	if err != nil {
 		return
+	}
+	if len(records) > 0 && nil != records[0].Header() {
+		ttl = records[0].Header().Ttl
 	}
 	addrs = convertRR_A(records)
 	if cname != "" {
 		name = cname
 	}
 
-	if options.OnlyIPv4 {
+	if !options.OnlyIPv4 {
 		_, records, err = lookup(dnscfg, name, dnsTypeAAAA)
 		if err != nil && len(addrs) > 0 {
 			// Ignore error because A lookup succeeded.
@@ -152,7 +164,7 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 
 	if options.Cache {
 		cacheMutex.Lock()
-		cacheLookupResults[name] = addrs
+		cacheLookupResults[name] = &dnsCache{addrs, ttl, time.Now()}
 		cacheMutex.Unlock()
 	}
 	return
