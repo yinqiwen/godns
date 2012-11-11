@@ -7,9 +7,15 @@ import (
 	"time"
 )
 
+const (
+	DNS_CACHE_TTL_SELF    = -2
+	DNS_CACHE_TTL_FOREVER = -1
+	DNS_NOCACHE           = 0
+)
+
 type LookupOptions struct {
 	DNSServers  []string // DNS servers to use
-	Cache       bool     //
+	CacheTTL    int      //
 	Net         string   //Default:udp
 	OnlyIPv4    bool
 	DialTimeout func(net, addr string, timeout time.Duration) (net.Conn, error)
@@ -103,12 +109,12 @@ func LookupHost(name string, options *LookupOptions) (addrs []string, err error)
 // depending on our lookup code, so that Go and C get the same
 // answers.
 func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
-	if options.Cache {
+	if options.CacheTTL != DNS_NOCACHE {
 		cacheMutex.Lock()
 		result, exist := cacheLookupResults[name]
 		cacheMutex.Unlock()
 		if exist {
-			if time.Now().Before(result.ts.Add(time.Duration(result.ttl) * time.Second)) {
+			if options.CacheTTL == DNS_CACHE_TTL_FOREVER || (time.Now().Before(result.ts.Add(time.Duration(result.ttl) * time.Second))) {
 				return result.ips, nil
 			}
 		}
@@ -142,9 +148,18 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 	if err != nil {
 		return
 	}
-	if len(records) > 0 && nil != records[0].Header() {
-		ttl = records[0].Header().Ttl
+	if options.CacheTTL > 0 {
+		ttl = uint32(options.CacheTTL)
 	}
+	if len(records) > 0 && nil != records[0].Header() {
+		if options.CacheTTL == DNS_CACHE_TTL_SELF {
+			ttl = records[0].Header().Ttl
+		}
+		if records[0].Header().Ttl > ttl {
+			ttl = records[0].Header().Ttl
+		}
+	}
+
 	addrs = convertRR_A(records)
 	if cname != "" {
 		name = cname
@@ -162,7 +177,7 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 		addrs = append(addrs, convertRR_AAAA(records)...)
 	}
 
-	if options.Cache {
+	if options.CacheTTL != DNS_NOCACHE {
 		cacheMutex.Lock()
 		cacheLookupResults[name] = &dnsCache{addrs, ttl, time.Now()}
 		cacheMutex.Unlock()
