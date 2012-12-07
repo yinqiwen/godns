@@ -121,7 +121,7 @@ func LookupIP(name string, options *LookupOptions) (addrs []net.IP, err error) {
 	}
 
 	if nil == options || nil == options.DNSServers || len(options.DNSServers) == 0 {
-		//return net.LookupIP(name)
+		return net.LookupIP(name)
 	}
 
 	haddrs := lookupStaticHost(name)
